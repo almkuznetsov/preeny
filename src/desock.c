@@ -159,20 +159,12 @@ int (*original_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrl
 int (*original_close)(int fd);
 int (*original_shutdown)(int sockfd, int how);
 int (*original_getsockname)(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-__attribute__((constructor)) void preeny_desock_orig()
-{
-	original_socket = dlsym(RTLD_NEXT, "socket");
-	original_listen = dlsym(RTLD_NEXT, "listen");
-	original_accept = dlsym(RTLD_NEXT, "accept");
-	original_bind = dlsym(RTLD_NEXT, "bind");
-	original_connect = dlsym(RTLD_NEXT, "connect");
-	original_close = dlsym(RTLD_NEXT, "close");
-	original_shutdown = dlsym(RTLD_NEXT, "shutdown");
-	original_getsockname = dlsym(RTLD_NEXT, "getsockname");
-}
 
 int socket(int domain, int type, int protocol)
 {
+	if (original_socket == NULL)
+		original_socket = dlsym(RTLD_NEXT, "socket");
+
 	int fds[2];
 	int front_socket;
 	int back_socket;
@@ -222,6 +214,9 @@ int socket(int domain, int type, int protocol)
 
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
+	if (original_accept == NULL)
+		original_accept = dlsym(RTLD_NEXT, "accept");
+
 	if (preeny_desock_accepted_sock >= 0)
 	{
                 errno = ECONNRESET;
@@ -257,6 +252,9 @@ int accept4(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags)
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
+	if (original_bind == NULL)
+		original_bind = dlsym(RTLD_NEXT, "bind");
+
 	if (preeny_socket_threads_to_front[sockfd])
 	{
 		preeny_info("Emulating bind on port %d\n", ntohs(((struct sockaddr_in*)addr)->sin_port));
@@ -270,17 +268,26 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
 int listen(int sockfd, int backlog)
 {
+	if (original_listen == NULL)
+		original_listen = dlsym(RTLD_NEXT, "listen");
+
 	if (preeny_socket_threads_to_front[sockfd]) return 0;
 	else return original_listen(sockfd, backlog);
 }
 
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
+	if (original_connect == NULL)
+		original_connect = dlsym(RTLD_NEXT, "connect");
+
 	if (preeny_socket_threads_to_front[sockfd]) return 0;
 	else return original_connect(sockfd, addr, addrlen);
 }
 
 int close(int fd) {
+	if (original_close == NULL)
+		original_close = dlsym(RTLD_NEXT, "close");
+
 	if (preeny_desock_accepted_sock != -1 && preeny_desock_accepted_sock == fd)
 		exit(0);
 
@@ -288,6 +295,9 @@ int close(int fd) {
 }
 
 int shutdown(int sockfd, int how) {
+	if (original_shutdown == NULL)
+		original_shutdown = dlsym(RTLD_NEXT, "shutdown");
+
 	if (preeny_desock_accepted_sock != -1 && preeny_desock_accepted_sock == sockfd)
 		exit(0);
 
@@ -295,6 +305,9 @@ int shutdown(int sockfd, int how) {
 }
 
 int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+	if (original_getsockname == NULL)
+		original_getsockname = dlsym(RTLD_NEXT, "getsockname");
+
 	struct sockaddr_in target;
 	socklen_t copylen = sizeof(target);
 
